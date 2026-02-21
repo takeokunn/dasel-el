@@ -158,5 +158,64 @@
       (should (eq cancelled-timer 'old-timer))
       (should (eq dasel-interactive--timer 'new-timer)))))
 
+;;; Completion (CAPF) tests
+
+(ert-deftest dasel-test-interactive-tab-binding ()
+  "Verify that TAB is bound to `completion-at-point' in `dasel-interactive-map'."
+  (should (eq (lookup-key dasel-interactive-map (kbd "TAB"))
+              #'completion-at-point)))
+
+(ert-deftest dasel-test-interactive-capf-root-level ()
+  "CAPF returns candidates for root-level keys."
+  (dasel-test-with-buffer "json" dasel-test-sample-json
+    (let ((dasel-interactive--source-buffer (current-buffer))
+          (dasel-interactive--input-format "json"))
+      (cl-letf (((symbol-function 'minibuffer-contents-no-properties) (lambda () ".na"))
+                ((symbol-function 'minibuffer-prompt-end) (lambda () 1)))
+        (dasel-test-with-mock-run 0 "name\nage\ntags" ""
+          (let ((result (dasel-interactive--completion-at-point)))
+            (should result)
+            (should (= (nth 0 result) 2))
+            (should (equal (nth 2 result) '("name" "age" "tags")))))))))
+
+(ert-deftest dasel-test-interactive-capf-nested ()
+  "CAPF returns candidates for nested keys."
+  (dasel-test-with-buffer "json" "{\"db\":{\"host\":\"localhost\",\"port\":5432}}"
+    (let ((dasel-interactive--source-buffer (current-buffer))
+          (dasel-interactive--input-format "json"))
+      (cl-letf (((symbol-function 'minibuffer-contents-no-properties) (lambda () ".db.ho"))
+                ((symbol-function 'minibuffer-prompt-end) (lambda () 1)))
+        (dasel-test-with-mock-run 0 "host\nport" ""
+          (let ((result (dasel-interactive--completion-at-point)))
+            (should result)
+            (should (= (nth 0 result) 5))
+            (should (equal (nth 2 result) '("host" "port")))))))))
+
+(ert-deftest dasel-test-interactive-capf-no-dot ()
+  "CAPF returns nil when input has no dot."
+  (dasel-test-with-buffer "json" dasel-test-sample-json
+    (let ((dasel-interactive--source-buffer (current-buffer))
+          (dasel-interactive--input-format "json"))
+      (cl-letf (((symbol-function 'minibuffer-contents-no-properties) (lambda () "name"))
+                ((symbol-function 'minibuffer-prompt-end) (lambda () 1)))
+        (should-not (dasel-interactive--completion-at-point))))))
+
+(ert-deftest dasel-test-interactive-capf-no-keys ()
+  "CAPF returns nil when dasel returns no keys."
+  (dasel-test-with-buffer "json" dasel-test-sample-json
+    (let ((dasel-interactive--source-buffer (current-buffer))
+          (dasel-interactive--input-format "json"))
+      (cl-letf (((symbol-function 'minibuffer-contents-no-properties) (lambda () "."))
+                ((symbol-function 'minibuffer-prompt-end) (lambda () 1)))
+        (dasel-test-with-mock-run 1 "" "error"
+          (should-not (dasel-interactive--completion-at-point)))))))
+
+(ert-deftest dasel-test-interactive-minibuffer-setup-registers-capf ()
+  "Minibuffer setup adds CAPF to completion-at-point-functions."
+  (with-temp-buffer
+    (dasel-interactive--minibuffer-setup)
+    (should (memq #'dasel-interactive--completion-at-point
+                  completion-at-point-functions))))
+
 (provide 'dasel-interactive-test)
 ;;; dasel-interactive-test.el ends here

@@ -32,6 +32,7 @@
 
 ;;; Code:
 
+(require 'cl-lib)
 (require 'dasel)
 
 (defgroup dasel-interactive nil
@@ -73,8 +74,31 @@ When nil, the output format is the same as the input format."
     (set-keymap-parent map minibuffer-local-map)
     (define-key map (kbd "C-c C-o") #'dasel-interactive-cycle-output-format)
     (define-key map (kbd "C-j") #'electric-newline-and-maybe-indent)
+    (define-key map (kbd "TAB") #'completion-at-point)
     map)
   "Keymap for `dasel-interactive'.")
+
+;;; Completion
+
+(defun dasel-interactive--completion-at-point ()
+  "Completion-at-point function for dasel selectors.
+Provides key-name completion based on the current path in the selector.
+Parses the selector to find the parent path (up to the last dot),
+then queries dasel for available keys under that path.
+Note: dots inside bracket selectors (e.g. [\"my.key\"]) are not handled."
+  (let* ((input (minibuffer-contents-no-properties))
+         (input-start (minibuffer-prompt-end))
+         (dot-pos (cl-position ?. input :from-end t)))
+    (when dot-pos
+      (let* ((parent (substring input 0 dot-pos))
+             (frag-start (+ input-start dot-pos 1))
+             (source-content (with-current-buffer dasel-interactive--source-buffer
+                               (buffer-substring-no-properties (point-min) (point-max))))
+             (keys (dasel--selector-candidates source-content
+                                               dasel-interactive--input-format
+                                               (if (string-empty-p parent) nil parent))))
+        (when keys
+          (list frag-start (point) keys))))))
 
 ;;; Execute
 
@@ -120,8 +144,10 @@ Debounces and triggers `dasel-interactive--execute'."
 
 (defun dasel-interactive--minibuffer-setup ()
   "Set up the minibuffer for interactive dasel querying.
-Adds `dasel-interactive--update' to `after-change-functions' locally."
-  (add-hook 'after-change-functions #'dasel-interactive--update nil t))
+Adds `dasel-interactive--update' to `after-change-functions' and
+registers `dasel-interactive--completion-at-point' for TAB completion."
+  (add-hook 'after-change-functions #'dasel-interactive--update nil t)
+  (add-hook 'completion-at-point-functions #'dasel-interactive--completion-at-point nil t))
 
 ;;; Cycle Output Format
 
