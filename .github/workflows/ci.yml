@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        emacs_version:
+          - 29.1
+          - 29.4
+          - 30.1
+          - snapshot
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: purcell/setup-emacs@8415786a52b3a84babd7ffc92a802b06e3780c17 # master
+        with:
+          version: ${{ matrix.emacs_version }}
+      - name: Install dasel
+        run: |
+          curl -sL https://github.com/TomWright/dasel/releases/download/v2.8.1/dasel_linux_amd64 -o /usr/local/bin/dasel
+          chmod +x /usr/local/bin/dasel
+          dasel --version
+      - name: Install consult
+        run: |
+          emacs --batch --eval "(progn
+            (require 'package)
+            (add-to-list 'package-archives '(\"melpa\" . \"https://melpa.org/packages/\") t)
+            (package-initialize)
+            (package-refresh-contents)
+            (package-install 'consult))"
+      - name: Byte compile
+        run: make compile
+      - name: Byte compile consult-dasel
+        run: make compile-consult BATCH="emacs -Q --batch --eval \"(package-initialize)\""
+      - name: Run tests
+        run: |
+          make test BATCH="emacs -Q --batch --eval \"(package-initialize)\""
+      - name: Lint
+        run: make lint
+      - name: Lint consult-dasel
+        run: make lint-consult BATCH="emacs -Q --batch --eval \"(package-initialize)\""
+      - name: Package lint
+        run: make package-lint
+      - name: Package lint consult-dasel
+        run: make package-lint-consult BATCH="emacs -Q --batch --eval \"(package-initialize)\""
