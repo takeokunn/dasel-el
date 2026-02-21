@@ -369,5 +369,20 @@ Caches the result so the check runs only once per Emacs session."
                         output)))))
     (setq dasel--version-checked t)))
 
+;;; Selector Candidates
+
+(defun dasel--selector-candidates (input-string format &optional prefix)
+  "Return key names under PREFIX from INPUT-STRING in FORMAT.
+PREFIX is a dasel selector path (e.g. \".users.[0]\").
+When nil, returns top-level keys.
+Uses dasel's .all().key() selector to enumerate keys.
+Returns nil if the query fails."
+  (let* ((selector (concat (or prefix "") ".all().key()"))
+         (result (dasel--run input-string format "plain" selector)))
+    (when (zerop (plist-get result :exit-code))
+      (let ((output (string-trim (plist-get result :output))))
+        (unless (string-empty-p output)
+          (split-string output "\n" t))))))
+
 (provide 'dasel)
 ;;; dasel.el ends here

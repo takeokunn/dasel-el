@@ -425,5 +425,46 @@
                  0)))
       (should-error (dasel--check-version) :type 'user-error))))
 
+;;; Selector Candidates tests
+
+(ert-deftest dasel-test-selector-candidates-success ()
+  "Selector candidates returns list of keys."
+  (dasel-test-with-mock-run 0 "name\nage\ntags" ""
+    (let ((result (dasel--selector-candidates "{}" "json")))
+      (should (equal result '("name" "age" "tags"))))))
+
+(ert-deftest dasel-test-selector-candidates-with-prefix ()
+  "Selector candidates with prefix queries nested keys."
+  (let ((captured-selector nil))
+    (let ((dasel--version-checked t))
+      (cl-letf (((symbol-function 'dasel--run)
+                 (lambda (_input _in-fmt &optional _out-fmt selector &rest _extra)
+                   (setq captured-selector selector)
+                   (list :output "host\nport" :exit-code 0 :error ""))))
+        (let ((result (dasel--selector-candidates "{}" "json" ".db")))
+          (should (equal captured-selector ".db.all().key()"))
+          (should (equal result '("host" "port"))))))))
+
+(ert-deftest dasel-test-selector-candidates-failure ()
+  "Selector candidates returns nil on dasel error."
+  (dasel-test-with-mock-run 1 "" "error"
+    (should-not (dasel--selector-candidates "{}" "json"))))
+
+(ert-deftest dasel-test-selector-candidates-empty ()
+  "Selector candidates returns nil for empty output."
+  (dasel-test-with-mock-run 0 "" ""
+    (should-not (dasel--selector-candidates "{}" "json"))))
+
+(ert-deftest dasel-test-selector-candidates-no-prefix ()
+  "Selector candidates without prefix uses .all().key() selector."
+  (let ((captured-selector nil))
+    (let ((dasel--version-checked t))
+      (cl-letf (((symbol-function 'dasel--run)
+                 (lambda (_input _in-fmt &optional _out-fmt selector &rest _extra)
+                   (setq captured-selector selector)
+                   (list :output "a\nb" :exit-code 0 :error ""))))
+        (dasel--selector-candidates "{}" "json")
+        (should (equal captured-selector ".all().key()"))))))
+
 (provide 'dasel-test)
 ;;; dasel-test.el ends here
