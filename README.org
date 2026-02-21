@@ -1,0 +1,173 @@
+#+title: dasel-el
+
+[[https://github.com/takeokunn/dasel-el/actions/workflows/ci.yml][file:https://github.com/takeokunn/dasel-el/actions/workflows/ci.yml/badge.svg]]
+
+Emacs interface to [[https://github.com/TomWright/dasel][dasel]] -- query, convert, format, and edit structured data (JSON, YAML, TOML, XML, CSV) without leaving Emacs.
+
+* Prerequisites
+
+- Emacs 29.1+
+- [[https://github.com/TomWright/dasel][dasel]] v2.8+
+
+#+begin_src shell
+# macOS
+brew install dasel
+
+# Go
+go install github.com/tomwright/dasel/v2/cmd/dasel@v2
+
+# GitHub Releases
+# https://github.com/TomWright/dasel/releases
+#+end_src
+
+- Optional: [[https://github.com/minad/consult][consult]] for =consult-dasel=
+
+* Installation
+
+** MELPA
+
+#+begin_src emacs-lisp
+(use-package dasel
+  :ensure t)
+#+end_src
+
+For =consult-dasel= (requires [[https://github.com/minad/consult][consult]]):
+
+#+begin_src emacs-lisp
+(use-package consult-dasel
+  :ensure t
+  :after (dasel consult))
+#+end_src
+
+** use-package + straight.el
+
+#+begin_src emacs-lisp
+(use-package dasel
+  :straight (:host github :repo "takeokunn/dasel-el" :files ("*.el")))
+#+end_src
+
+** use-package + elpaca
+
+#+begin_src emacs-lisp
+(use-package dasel
+  :ensure (:host github :repo "takeokunn/dasel-el" :files ("*.el")))
+#+end_src
+
+** leaf.el
+
+#+begin_src emacs-lisp
+(leaf dasel
+  :straight (dasel :type git :host github :repo "takeokunn/dasel-el" :files ("*.el")))
+#+end_src
+
+* Commands
+
+** =dasel-interactive=
+
+Open a minibuffer for live selector querying. Results update in a =*dasel-output*= side window as you type.
+
+*Keybindings in the minibuffer:*
+
+| Key       | Action              |
+|-----------+---------------------|
+| =C-c C-o= | Cycle output format |
+| =C-j=     | Insert newline      |
+
+*Example:* Open a JSON file, run =M-x dasel-interactive=, then type =users.all().name= to extract all user names.
+
+** =consult-dasel=
+
+Same live querying experience built on [[https://github.com/minad/consult][consult]]'s preview mechanism. Requires the consult package.
+
+#+begin_src emacs-lisp
+(use-package consult-dasel
+  :after (dasel consult)
+  :straight (:host github :repo "takeokunn/dasel-el" :files ("consult-dasel.el")))
+#+end_src
+
+** =dasel-convert=
+
+Convert buffer or region between formats. When called interactively, prompts for the target format.
+
+Convenience commands for common conversions are also provided:
+
+- =dasel-convert-json-to-yaml= / =dasel-convert-yaml-to-json=
+- =dasel-convert-json-to-toml= / =dasel-convert-toml-to-json=
+- =dasel-convert-json-to-xml= / =dasel-convert-xml-to-json=
+- =dasel-convert-yaml-to-toml= / =dasel-convert-toml-to-yaml=
+
+** =dasel-format-buffer= / =dasel-format-region=
+
+Pretty-print structured data in the current buffer or active region.
+
+** =dasel-format-on-save-mode=
+
+Minor mode that auto-formats the buffer before each save. Enable it per-buffer or via a mode hook:
+
+#+begin_src emacs-lisp
+(add-hook 'json-ts-mode-hook #'dasel-format-on-save-mode)
+#+end_src
+
+** =dasel-edit-put=
+
+Modify values in-place using dasel's put subcommand. Prompts for a selector, a value type, and a value, then replaces the buffer contents with the modified document.
+
+*Example:* In a JSON buffer, run =M-x dasel-edit-put=, enter selector =name=, type =string=, and value =Alice=.
+
+* Configuration
+
+#+begin_src emacs-lisp
+(use-package dasel
+  :straight (:host github :repo "takeokunn/dasel-el" :files ("*.el"))
+  :custom
+  ;; Path to the dasel binary (default: "dasel")
+  (dasel-command "dasel")
+  ;; Debounce delay for live queries in seconds (default: 0.3)
+  (dasel-interactive-delay 0.3)
+  ;; Side window position: right, bottom, left, top (default: right)
+  (dasel-output-window-side 'right)
+  ;; Side window size ratio (default: 0.4)
+  (dasel-output-window-size 0.4)
+  ;; Alist mapping format strings to major modes for the output buffer
+  (dasel-output-mode-alist
+   '(("json" . json-ts-mode)
+     ("yaml" . yaml-ts-mode)
+     ("toml" . toml-ts-mode)
+     ("xml"  . nxml-mode)
+     ("csv"  . csv-mode))))
+#+end_src
+
+You can also set =dasel-buffer-format= as a buffer-local variable to override automatic format detection:
+
+#+begin_src emacs-lisp
+;; -*- dasel-buffer-format: "json" -*-
+#+end_src
+
+* Suggested Keybindings
+
+#+begin_src emacs-lisp
+(global-set-key (kbd "C-c d i") #'dasel-interactive)
+(global-set-key (kbd "C-c d c") #'dasel-convert)
+(global-set-key (kbd "C-c d f") #'dasel-format-buffer)
+(global-set-key (kbd "C-c d p") #'dasel-edit-put)
+#+end_src
+
+These bindings use the =C-c LETTER= prefix, which Emacs conventions reserve for user-defined keys. They are not set by the package and are shown here as suggestions for your personal configuration.
+
+* Usage
+
+See the [[file:example/][example/]] directory for sample Org files demonstrating each feature.
+
+* Development
+
+#+begin_src shell
+make compile       # Byte-compile all source files
+make test          # Run ERT tests
+make lint          # Run checkdoc
+make package-lint  # Run package-lint
+nix flake check    # Run all checks via Nix
+#+end_src
+
+* License
+
+GPL-3.0-or-later. See [[file:LICENSE][LICENSE]].

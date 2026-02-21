@@ -1,0 +1,7 @@
+*.elc
+*~
+*.~undo-tree~
+\#*\#
+.\#*
+.direnv/
+result
