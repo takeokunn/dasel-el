@@ -127,22 +127,6 @@
         (dasel-edit-put)
         (should (string-match-p "Bob" (buffer-string)))))))
 
-(ert-deftest dasel-test-edit-selector-candidates-success ()
-  "Selector candidates returns list of keys."
-  (dasel-test-with-mock-run 0 "name\nage\ntags" ""
-    (let ((result (dasel-edit--selector-candidates "{}" "json")))
-      (should (equal result '("name" "age" "tags"))))))
-
-(ert-deftest dasel-test-edit-selector-candidates-failure ()
-  "Selector candidates returns nil on dasel error."
-  (dasel-test-with-mock-run 1 "" "error"
-    (should-not (dasel-edit--selector-candidates "{}" "json"))))
-
-(ert-deftest dasel-test-edit-selector-candidates-empty ()
-  "Selector candidates returns nil for empty output."
-  (dasel-test-with-mock-run 0 "" ""
-    (should-not (dasel-edit--selector-candidates "{}" "json"))))
-
 (ert-deftest dasel-test-edit-infer-type-int ()
   "Infer type returns int for integer strings."
   (should (equal (dasel-edit--infer-type "42") "int"))

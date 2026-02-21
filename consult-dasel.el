@@ -6,7 +6,7 @@
 ;; Maintainer: takeokunn <bararararatty@gmail.com>
 ;; URL: https://github.com/takeokunn/dasel-el
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "29.1") (consult "1.0"))
+;; Package-Requires: ((emacs "29.1") (consult "1.0") (dasel "0.1.0"))
 ;; Keywords: tools, data
 
 ;; This file is NOT part of GNU Emacs.

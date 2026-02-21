@@ -45,12 +45,6 @@
 (defvar dasel-edit--type-history nil
   "History list for dasel-edit-put type input.")
 
-(defun dasel-edit--selector-candidates (input-string format)
-  "Return a list of top-level key names from INPUT-STRING in FORMAT.
-Uses dasel's .all().key() selector to enumerate keys.
-Returns nil if the query fails."
-  (dasel--selector-candidates input-string format))
-
 (defun dasel-edit--infer-type (value-string)
   "Infer the dasel put type from VALUE-STRING.
 Returns one of \"int\", \"float\", \"bool\", \"json\", or \"string\"."
@@ -92,7 +86,7 @@ the buffer contents with the result."
     (unless fmt
       (user-error "Cannot detect data format for current buffer"))
     (let* ((input (buffer-substring-no-properties (point-min) (point-max)))
-           (candidates (dasel-edit--selector-candidates input fmt))
+           (candidates (dasel--selector-candidates input fmt))
            (selector (completing-read "Selector: " candidates
                                       nil nil nil 'dasel-edit--selector-history))
            (current-val (dasel-edit--current-value input fmt selector))

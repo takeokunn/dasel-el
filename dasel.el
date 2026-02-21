@@ -348,7 +348,8 @@ FORMAT is used to determine the appropriate major mode."
 
 (defun dasel--check-version ()
   "Check that dasel is installed and is version 2.8 or later.
-Signals `user-error' if dasel is not found or version is too old.
+Only dasel v2 is supported; v3 has incompatible CLI changes.
+Signals `user-error' if dasel is not found or version is unsupported.
 Caches the result so the check runs only once per Emacs session."
   (unless dasel--version-checked
     (unless (executable-find dasel-command)
@@ -364,8 +365,11 @@ Caches the result so the check runs only once per Emacs session."
                (minor-version (cdr version-pair)))
           (unless version-pair
             (user-error "Could not parse dasel version from: %s" output))
+          ;; Only v2.8+ is supported.  Dasel v3 introduces breaking CLI
+          ;; changes (different subcommands, flags, and output behaviour)
+          ;; that are incompatible with this package.
           (unless (and (= major-version 2) (>= minor-version 8))
-            (user-error "Dasel v2.8+ is required (found %s); install from https://github.com/TomWright/dasel"
+            (user-error "Dasel v2.8+ is required; v3 is not supported (found %s)"
                         output)))))
     (setq dasel--version-checked t)))
 

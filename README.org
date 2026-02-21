@@ -7,7 +7,7 @@ Emacs interface to [[https://github.com/TomWright/dasel][dasel]] -- query, conve
 * Prerequisites
 
 - Emacs 29.1+
-- [[https://github.com/TomWright/dasel][dasel]] v2.8+
+- [[https://github.com/TomWright/dasel][dasel]] v2.8+ (v3 is *not* supported due to incompatible CLI changes)
 
 #+begin_src shell
 # macOS
