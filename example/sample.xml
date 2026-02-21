@@ -1,0 +1,47 @@
+<project>
+  <name>dasel-el</name>
+  <version>0.1.0</version>
+  <description>Emacs interface to dasel</description>
+  <author>
+    <name>takeokunn</name>
+    <email>bararararatty@gmail.com</email>
+    <url>https://github.com/takeokunn</url>
+  </author>
+  <keywords>
+    <item>emacs</item>
+    <item>dasel</item>
+    <item>json</item>
+    <item>yaml</item>
+    <item>toml</item>
+  </keywords>
+  <server>
+    <host>localhost</host>
+    <port>8080</port>
+    <debug>true</debug>
+    <ports>
+      <item>8080</item>
+      <item>8443</item>
+      <item>9090</item>
+    </ports>
+  </server>
+  <users>
+    <item>
+      <name>Alice</name>
+      <age>30</age>
+      <email>alice@example.com</email>
+      <active>true</active>
+    </item>
+    <item>
+      <name>Bob</name>
+      <age>25</age>
+      <email>bob@example.com</email>
+      <active>true</active>
+    </item>
+    <item>
+      <name>Charlie</name>
+      <age>35</age>
+      <email>charlie@example.com</email>
+      <active>true</active>
+    </item>
+  </users>
+</project>

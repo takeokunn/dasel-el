@@ -1,0 +1,29 @@
+#+title: dasel-el Format Conversion Examples
+#+author: takeokunn
+
+* Setup
+
+#+begin_src emacs-lisp :eval yes
+(add-to-list 'load-path (expand-file-name ".."))
+(require 'dasel)
+(require 'dasel-convert)
+#+end_src
+
+* JSON to YAML
+
+Open a JSON buffer and run =M-x dasel-convert=, then select =yaml=.
+
+Or use the convenience command: =M-x dasel-convert-json-to-yaml=.
+
+* Available Conversions
+
+| Command                         | From | To   |
+|---------------------------------+------+------|
+| =dasel-convert-json-to-yaml=    | JSON | YAML |
+| =dasel-convert-yaml-to-json=    | YAML | JSON |
+| =dasel-convert-json-to-toml=    | JSON | TOML |
+| =dasel-convert-toml-to-json=    | TOML | JSON |
+| =dasel-convert-json-to-xml=     | JSON | XML  |
+| =dasel-convert-xml-to-json=     | XML  | JSON |
+| =dasel-convert-yaml-to-toml=    | YAML | TOML |
+| =dasel-convert-toml-to-yaml=    | TOML | YAML |

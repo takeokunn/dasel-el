@@ -1,0 +1,40 @@
+#+title: dasel-el Interactive Query Examples
+#+author: takeokunn
+
+* Setup
+
+Before running examples, load dasel-el:
+
+#+begin_src emacs-lisp :eval yes
+(add-to-list 'load-path (expand-file-name ".."))
+(require 'dasel)
+(require 'dasel-interactive)
+#+end_src
+
+* Basic Query
+
+Open a JSON file and run =M-x dasel-interactive=, then type a selector.
+
+Example JSON:
+
+#+begin_src json
+{
+  "name": "Alice",
+  "age": 30,
+  "address": {
+    "city": "Tokyo",
+    "zip": "100-0001"
+  }
+}
+#+end_src
+
+Try these selectors:
+- =name= → ="Alice"=
+- =address.city= → ="Tokyo"=
+
+* Keybindings
+
+| Key       | Action              |
+|-----------+---------------------|
+| =C-c C-o= | Cycle output format |
+| =C-j=     | Insert newline      |

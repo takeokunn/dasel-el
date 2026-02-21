@@ -1,0 +1,40 @@
+#+title: dasel-el Formatting Examples
+#+author: takeokunn
+
+* Setup
+
+#+begin_src emacs-lisp :eval yes
+(add-to-list 'load-path (expand-file-name ".."))
+(require 'dasel)
+(require 'dasel-format)
+#+end_src
+
+* Pretty-print a Buffer
+
+Open a compact JSON file and run =M-x dasel-format-buffer=.
+
+Before:
+
+#+begin_src json
+{"name":"Alice","age":30,"address":{"city":"Tokyo"}}
+#+end_src
+
+After:
+
+#+begin_src json
+{
+  "name": "Alice",
+  "age": 30,
+  "address": {
+    "city": "Tokyo"
+  }
+}
+#+end_src
+
+* Format on Save
+
+Enable automatic formatting before each save:
+
+#+begin_src emacs-lisp
+(add-hook 'json-ts-mode-hook #'dasel-format-on-save-mode)
+#+end_src

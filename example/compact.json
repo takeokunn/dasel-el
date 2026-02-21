@@ -1,0 +1,1 @@
+{"name":"dasel-el","version":"0.1.0","server":{"host":"localhost","port":8080,"debug":true},"users":[{"name":"Alice","age":30,"active":true},{"name":"Bob","age":25,"active":false}]}

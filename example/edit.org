@@ -1,0 +1,42 @@
+#+title: dasel-el Edit Examples
+#+author: takeokunn
+
+* Setup
+
+#+begin_src emacs-lisp :eval yes
+(add-to-list 'load-path (expand-file-name ".."))
+(require 'dasel)
+(require 'dasel-edit)
+#+end_src
+
+* In-place Editing
+
+Open a JSON buffer and run =M-x dasel-edit-put=.
+
+You will be prompted for:
+1. A selector (e.g. =name=)
+2. A value (e.g. ="Bob"=)
+
+The buffer content is modified in-place.
+
+* Example
+
+Before:
+
+#+begin_src json
+{
+  "name": "Alice",
+  "age": 30
+}
+#+end_src
+
+Run =M-x dasel-edit-put= with selector =name= and value ="Bob"=:
+
+After:
+
+#+begin_src json
+{
+  "name": "Bob",
+  "age": 30
+}
+#+end_src
