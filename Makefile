@@ -46,7 +46,7 @@ lint-consult:
 
 package-lint-consult:
 	$(BATCH) $(LOAD_PATH) \
-	  --eval "(progn (require 'package) (push '(\"melpa\" . \"https://melpa.org/packages/\") package-archives) (package-initialize) (package-refresh-contents) (package-install 'package-lint))" \
+	  --eval "(progn (require 'package) (push '(\"melpa\" . \"https://melpa.org/packages/\") package-archives) (package-initialize) (package-refresh-contents) (package-install 'package-lint) (package-install-file (expand-file-name \"dasel.el\")))" \
 	  -l package-lint \
 	  -f package-lint-batch-and-exit $(CONSULT_SRC)
 
