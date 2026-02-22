@@ -24,7 +24,11 @@ go install github.com/tomwright/dasel/v2/cmd/dasel@v2
 
 * Installation
 
-** MELPA
+** MELPA (WIP)
+
+#+begin_quote
+This package has been submitted to MELPA but is not yet accepted. In the meantime, please install via straight.el, elpaca, or another source-based package manager.
+#+end_quote
 
 #+begin_src emacs-lisp
 (use-package dasel
