@@ -217,5 +217,67 @@
     (should (memq #'dasel-interactive--completion-at-point
                   completion-at-point-functions))))
 
+;;; Lifecycle / unwind-protect tests
+
+(ert-deftest dasel-test-interactive-abort-cancels-timer ()
+  "Aborting the session cancels any pending debounce timer."
+  (let ((timer-cancelled nil)
+        (fake-timer (list 'fake-timer)))
+    (cl-letf (((symbol-function 'dasel--detect-format) (lambda (&optional _buf) "json"))
+              ((symbol-function 'minibuffer-with-setup-hook)
+               (lambda (_hook &rest _body) nil))
+              ((symbol-function 'read-from-minibuffer)
+               (lambda (&rest _args) (signal 'quit nil)))
+              ((symbol-function 'cancel-timer)
+               (lambda (timer)
+                 (when (eq timer fake-timer)
+                   (setq timer-cancelled t)))))
+      ;; Prime the state as if a timer was running.
+      (setq dasel-interactive--timer fake-timer)
+      ;; `quit' is not caught by `ignore-errors'; use `condition-case'.
+      (condition-case nil (dasel-interactive) (quit nil))
+      (should timer-cancelled)
+      (should (null dasel-interactive--timer)))))
+
+(ert-deftest dasel-test-interactive-abort-resets-state ()
+  "Aborting the session resets all interactive state variables to nil."
+  (cl-letf (((symbol-function 'dasel--detect-format) (lambda (&optional _buf) "json"))
+            ((symbol-function 'minibuffer-with-setup-hook)
+             (lambda (_hook &rest _body) nil))
+            ((symbol-function 'read-from-minibuffer)
+             (lambda (&rest _args) (signal 'quit nil)))
+            ((symbol-function 'dasel--close-output-window) #'ignore))
+    (condition-case nil (dasel-interactive) (quit nil))
+    (should (null dasel-interactive--source-buffer))
+    (should (null dasel-interactive--input-format))
+    (should (null dasel-interactive--last-input))))
+
+(ert-deftest dasel-test-interactive-abort-closes-output-window ()
+  "Aborting the session closes the output window."
+  (let ((window-closed nil))
+    (cl-letf (((symbol-function 'dasel--detect-format) (lambda (&optional _buf) "json"))
+              ((symbol-function 'minibuffer-with-setup-hook)
+               (lambda (_hook &rest _body) nil))
+              ((symbol-function 'read-from-minibuffer)
+               (lambda (&rest _args) (signal 'quit nil)))
+              ((symbol-function 'dasel--close-output-window)
+               (lambda () (setq window-closed t))))
+      (condition-case nil (dasel-interactive) (quit nil))
+      (should window-closed))))
+
+(ert-deftest dasel-test-interactive-normal-exit-keeps-output-window ()
+  "Normal (non-aborted) exit does NOT close the output window."
+  (let ((window-closed nil))
+    (cl-letf (((symbol-function 'dasel--detect-format) (lambda (&optional _buf) "json"))
+              ((symbol-function 'minibuffer-with-setup-hook)
+               (lambda (_hook &rest _body) nil))
+              ((symbol-function 'read-from-minibuffer)
+               ;; Normal exit: just return without signalling.
+               (lambda (&rest _args) nil))
+              ((symbol-function 'dasel--close-output-window)
+               (lambda () (setq window-closed t))))
+      (dasel-interactive)
+      (should-not window-closed))))
+
 (provide 'dasel-interactive-test)
 ;;; dasel-interactive-test.el ends here

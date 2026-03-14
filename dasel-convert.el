@@ -36,16 +36,41 @@
 (require 'dasel)
 
 (defcustom dasel-convert-formats dasel-supported-formats
-  "Available target formats for conversion."
+  "List of format strings available as conversion targets.
+Defaults to `dasel-supported-formats'.  Customize to restrict
+the choices shown in the `dasel-convert' prompt."
   :type '(repeat string)
   :group 'dasel)
 
+;;; Internal helpers
+
+(defun dasel-convert--do (input-format target-format beg end)
+  "Convert region BEG..END from INPUT-FORMAT to TARGET-FORMAT.
+Replaces the region in place, switches the buffer's major mode to
+the mode appropriate for TARGET-FORMAT, and updates
+`dasel-buffer-format'.  Signals `user-error' on failure."
+  (let* ((content (buffer-substring-no-properties beg end))
+         (result (dasel--run content input-format target-format)))
+    (if (zerop (plist-get result :exit-code))
+        (progn
+          (undo-boundary)
+          (atomic-change-group
+            (delete-region beg end)
+            (goto-char beg)
+            (insert (plist-get result :output)))
+          (funcall (dasel--mode-for-format target-format))
+          (setq dasel-buffer-format target-format))
+      (user-error "%s" (string-trim (or (plist-get result :error) "unknown error"))))))
+
+;;; Interactive commands
+
 ;;;###autoload
 (defun dasel-convert (target-format)
-  "Convert buffer or region to TARGET-FORMAT using dasel.
-When called interactively, prompts for the target format.
-If region is active, convert only the region; otherwise convert
-the entire buffer."
+  "Convert the buffer or active region to TARGET-FORMAT using dasel.
+When called interactively, prompts for the target format using
+`dasel-convert-formats'.  If a region is active, only the region
+is converted; otherwise the entire buffer is converted.
+Updates `dasel-buffer-format' and switches to the appropriate major mode."
   (interactive
    (let ((input-format (dasel--detect-format)))
      (unless input-format
@@ -54,47 +79,29 @@ the entire buffer."
             "Convert to: "
             (remove input-format dasel-convert-formats)
             nil t))))
-  (let* ((input-format (dasel--detect-format)))
+  (let ((input-format (dasel--detect-format)))
     (unless input-format
       (user-error "Cannot detect input format; set `dasel-buffer-format'"))
-    (let* ((beg (if (use-region-p) (region-beginning) (point-min)))
-           (end (if (use-region-p) (region-end) (point-max)))
-           (content (buffer-substring-no-properties beg end))
-           (result (dasel--run content input-format target-format)))
-      (if (zerop (plist-get result :exit-code))
-          (progn
-            (undo-boundary)
-            (atomic-change-group
-              (delete-region beg end)
-              (goto-char beg)
-              (insert (plist-get result :output)))
-            (funcall (dasel--mode-for-format target-format))
-            (setq dasel-buffer-format target-format))
-        (user-error "%s" (plist-get result :error))))))
+    (let ((beg (if (use-region-p) (region-beginning) (point-min)))
+          (end (if (use-region-p) (region-end) (point-max))))
+      (dasel-convert--do input-format target-format beg end))))
+
+;;; Convenience command macro
 
 (defmacro dasel-convert--define (from to)
   "Define a convenience command `dasel-convert-FROM-to-TO'.
-FROM and TO are unquoted symbols naming dasel format strings."
+FROM and TO are unquoted symbols whose names are dasel format strings.
+The generated command converts the buffer or active region from FROM
+to TO, replacing content in place."
   (let ((fn-name (intern (format "dasel-convert-%s-to-%s" from to)))
         (from-str (symbol-name from))
         (to-str (symbol-name to)))
     `(defun ,fn-name ()
-         ,(format "Convert buffer or region from %s to %s." from-str to-str)
-         (interactive)
-         (let* ((beg (if (use-region-p) (region-beginning) (point-min)))
-                (end (if (use-region-p) (region-end) (point-max)))
-                (content (buffer-substring-no-properties beg end))
-                (result (dasel--run content ,from-str ,to-str)))
-           (if (zerop (plist-get result :exit-code))
-               (progn
-                 (undo-boundary)
-                 (atomic-change-group
-                   (delete-region beg end)
-                   (goto-char beg)
-                   (insert (plist-get result :output)))
-                 (funcall (dasel--mode-for-format ,to-str))
-                 (setq dasel-buffer-format ,to-str))
-             (user-error "%s" (plist-get result :error)))))))
+       ,(format "Convert buffer or region from %s to %s using dasel." from-str to-str)
+       (interactive)
+       (let ((beg (if (use-region-p) (region-beginning) (point-min)))
+             (end (if (use-region-p) (region-end) (point-max))))
+         (dasel-convert--do ,from-str ,to-str beg end)))))
 
 ;;;###autoload (autoload 'dasel-convert-json-to-yaml "dasel-convert" nil t)
 ;;;###autoload (autoload 'dasel-convert-yaml-to-json "dasel-convert" nil t)

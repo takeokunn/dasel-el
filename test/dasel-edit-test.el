@@ -89,7 +89,8 @@
                      ("Selector: " "db.host")
                      ("Type: " "string")
                      ("Value: " "prod")))))
-        (let ((dasel--version-checked t))
+        (let ((dasel--version-checked t)
+              (dasel--major-version 2))
           (dasel-edit-put)
           (should (equal (plist-get captured-args :type) "string"))
           (should (equal (plist-get captured-args :value) "prod"))
@@ -114,18 +115,22 @@
           (should buffer-undo-list))))))
 
 (ert-deftest dasel-test-edit-put-integration ()
-  "Integration test: edit put with real dasel binary."
-  (skip-unless (dasel-test-v2-available-p))
-  (let ((dasel--version-checked t))
-    (dasel-test-with-buffer "json" "{\"name\":\"Alice\"}"
-      (cl-letf (((symbol-function 'completing-read)
-                 (lambda (prompt _collection &optional _predicate _require-match _initial _hist _def)
-                   (pcase prompt
-                     ("Selector: " ".name")
-                     ("Type: " "string")
-                     ("Value: " "Bob")))))
-        (dasel-edit-put)
-        (should (string-match-p "Bob" (buffer-string)))))))
+  "Integration test: edit put with real dasel binary (v2 or v3)."
+  (skip-unless (dasel-test-any-available-p))
+  (let ((dasel--version-checked nil)
+        (dasel--major-version nil))
+    ;; Detect version first so we can pick the right selector syntax.
+    (dasel--check-version)
+    (let ((selector (if (= dasel--major-version 3) "name" ".name")))
+      (dasel-test-with-buffer "json" "{\"name\":\"Alice\"}"
+        (cl-letf (((symbol-function 'completing-read)
+                   (lambda (prompt _collection &optional _predicate _require-match _initial _hist _def)
+                     (pcase prompt
+                       ("Selector: " selector)
+                       ("Type: " "string")
+                       ("Value: " "Bob")))))
+          (dasel-edit-put)
+          (should (string-match-p "Bob" (buffer-string))))))))
 
 (ert-deftest dasel-test-edit-infer-type-int ()
   "Infer type returns int for integer strings."
@@ -213,6 +218,53 @@
   "Value candidates returns nil when no current value and not bool."
   (should-not (dasel-edit--value-candidates "string" nil))
   (should-not (dasel-edit--value-candidates "int" nil)))
+
+;;; Additional infer-type edge cases
+
+(ert-deftest dasel-test-edit-infer-type-negative-int ()
+  "Infer type returns int for negative integers."
+  (should (equal (dasel-edit--infer-type "-100") "int")))
+
+(ert-deftest dasel-test-edit-infer-type-negative-float ()
+  "Infer type returns float for negative decimals."
+  (should (equal (dasel-edit--infer-type "-3.14") "float")))
+
+(ert-deftest dasel-test-edit-infer-type-json-array ()
+  "Infer type returns json for array values starting with `['."
+  (should (equal (dasel-edit--infer-type "[1, 2, 3]") "json")))
+
+(ert-deftest dasel-test-edit-infer-type-empty-string ()
+  "Infer type returns string for empty input."
+  (should (equal (dasel-edit--infer-type "") "string")))
+
+(ert-deftest dasel-test-edit-infer-type-integer-like-float ()
+  "Infer type returns int for 0, not float."
+  (should (equal (dasel-edit--infer-type "0") "int")))
+
+;;; current-value edge cases
+
+(ert-deftest dasel-test-edit-current-value-with-whitespace ()
+  "Current value trims surrounding whitespace from output."
+  (dasel-test-with-mock-run 0 "  hello  \n" ""
+    (should (equal (dasel-edit--current-value "{}" "json" ".key") "hello"))))
+
+;;; Error message trimming
+
+(ert-deftest dasel-test-edit-put-error-message-trimmed ()
+  "Edit put trims trailing whitespace from error messages."
+  (dasel-test-with-buffer "json" dasel-test-sample-json
+    (cl-letf (((symbol-function 'completing-read)
+               (lambda (prompt _collection &optional _predicate _require-match _initial _hist _def)
+                 (pcase prompt
+                   ("Selector: " "bad")
+                   ("Type: " "string")
+                   ("Value: " "x")))))
+      (dasel-test-with-mock-run 0 "name\nage" ""
+        (dasel-test-with-mock-put 1 "" "some error\n  "
+          (condition-case err
+              (dasel-edit-put)
+            (user-error
+             (should (not (string-suffix-p " " (cadr err)))))))))))
 
 (provide 'dasel-edit-test)
 ;;; dasel-edit-test.el ends here

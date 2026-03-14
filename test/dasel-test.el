@@ -75,6 +75,25 @@
     (insert "  \n\t  {\"key\": \"value\"}")
     (should (equal "json" (dasel--sniff-content)))))
 
+(ert-deftest dasel-test-sniff-toml-simple ()
+  "`key = value' pattern is detected as TOML."
+  (with-temp-buffer
+    (insert "name = \"Alice\"\nage = 30\n")
+    (should (equal "toml" (dasel--sniff-content)))))
+
+(ert-deftest dasel-test-sniff-toml-underscore-key ()
+  "TOML key with underscore is detected as TOML."
+  (with-temp-buffer
+    (insert "some_key = true\n")
+    (should (equal "toml" (dasel--sniff-content)))))
+
+(ert-deftest dasel-test-sniff-toml-takes-priority-over-yaml ()
+  "TOML `key = value' is detected before YAML `key: value' pattern."
+  ;; Both patterns could match but TOML check is first.
+  (with-temp-buffer
+    (insert "title = \"Test\"\n")
+    (should (equal "toml" (dasel--sniff-content)))))
+
 ;;; Tree-sitter availability tests
 
 (ert-deftest dasel-test-ts-mode-available-p-no-grammar ()
@@ -221,77 +240,111 @@
 
 (ert-deftest dasel-test-check-version-not-found ()
   "Signals user-error when dasel binary is not found."
-  (let ((dasel--version-checked nil))
-    (cl-letf (((symbol-function 'executable-find) (lambda (_cmd) nil)))
+  (let ((dasel--version-checked nil)
+        (dasel--major-version nil))
+    (cl-letf (((symbol-function 'dasel--version-string) (lambda () nil)))
       (should-error (dasel--check-version) :type 'user-error))))
 
 (ert-deftest dasel-test-check-version-v2-ok ()
-  "Succeeds for version 2.8.x output."
-  (let ((dasel--version-checked nil))
-    (cl-letf (((symbol-function 'executable-find) (lambda (_cmd) "/usr/bin/dasel"))
-              ((symbol-function 'call-process)
-               (lambda (_program &optional _infile _destination _display &rest _args)
-                 (insert "dasel version 2.8.1")
-                 0)))
+  "Succeeds for version 2.8.x; sets major version to 2."
+  (let ((dasel--version-checked nil)
+        (dasel--major-version nil))
+    (cl-letf (((symbol-function 'dasel--version-string)
+               (lambda () "dasel version 2.8.1")))
       (dasel--check-version)
-      (should (eq t dasel--version-checked)))))
+      (should (eq t dasel--version-checked))
+      (should (= 2 dasel--major-version)))))
 
-(ert-deftest dasel-test-check-version-v3-rejected ()
-  "Signals user-error for version 3.x.x."
-  (let ((dasel--version-checked nil))
-    (cl-letf (((symbol-function 'executable-find) (lambda (_cmd) "/usr/bin/dasel"))
-              ((symbol-function 'call-process)
-               (lambda (_program &optional _infile _destination _display &rest _args)
-                 (insert "v3.2.2")
-                 0)))
-      (should-error (dasel--check-version) :type 'user-error))))
+(ert-deftest dasel-test-check-version-v3-ok ()
+  "Succeeds for version 3.x; sets major version to 3."
+  (let ((dasel--version-checked nil)
+        (dasel--major-version nil))
+    (cl-letf (((symbol-function 'dasel--version-string)
+               (lambda () "v3.2.2")))
+      (dasel--check-version)
+      (should (eq t dasel--version-checked))
+      (should (= 3 dasel--major-version)))))
 
 (ert-deftest dasel-test-check-version-v2-old ()
   "Signals user-error for version 2.7.x (below minimum 2.8)."
-  (let ((dasel--version-checked nil))
-    (cl-letf (((symbol-function 'executable-find) (lambda (_cmd) "/usr/bin/dasel"))
-              ((symbol-function 'call-process)
-               (lambda (_program &optional _infile _destination _display &rest _args)
-                 (insert "dasel version 2.7.0")
-                 0)))
+  (let ((dasel--version-checked nil)
+        (dasel--major-version nil))
+    (cl-letf (((symbol-function 'dasel--version-string)
+               (lambda () "dasel version 2.7.0")))
       (should-error (dasel--check-version) :type 'user-error))))
 
 (ert-deftest dasel-test-check-version-v1 ()
   "Signals user-error for version 1.x.x."
-  (let ((dasel--version-checked nil))
-    (cl-letf (((symbol-function 'executable-find) (lambda (_cmd) "/usr/bin/dasel"))
-              ((symbol-function 'call-process)
-               (lambda (_program &optional _infile _destination _display &rest _args)
-                 (insert "dasel version 1.27.0")
-                 0)))
+  (let ((dasel--version-checked nil)
+        (dasel--major-version nil))
+    (cl-letf (((symbol-function 'dasel--version-string)
+               (lambda () "dasel version 1.27.0")))
       (should-error (dasel--check-version) :type 'user-error))))
 
 (ert-deftest dasel-test-check-version-development ()
-  "Accepts \"development\" as a valid version."
-  (let ((dasel--version-checked nil))
-    (cl-letf (((symbol-function 'executable-find) (lambda (_cmd) "/usr/bin/dasel"))
-              ((symbol-function 'call-process)
-               (lambda (_program &optional _infile _destination _display &rest _args)
-                 (insert "development")
-                 0)))
+  "Accepts \"development\" as a valid version; treats as v3."
+  (let ((dasel--version-checked nil)
+        (dasel--major-version nil))
+    (cl-letf (((symbol-function 'dasel--version-string)
+               (lambda () "development")))
       (dasel--check-version)
-      (should (eq t dasel--version-checked)))))
+      (should (eq t dasel--version-checked))
+      (should (= 3 dasel--major-version)))))
 
 (ert-deftest dasel-test-check-version-caching ()
   "Version is only checked once per session."
   (let ((dasel--version-checked nil)
-        (check-count 0))
-    (cl-letf (((symbol-function 'executable-find)
-               (lambda (_cmd)
-                 (cl-incf check-count)
-                 "/usr/bin/dasel"))
-              ((symbol-function 'call-process)
-               (lambda (_program &optional _infile _destination _display &rest _args)
-                 (insert "dasel version 2.8.1")
-                 0)))
+        (dasel--major-version nil)
+        (call-count 0))
+    (cl-letf (((symbol-function 'dasel--version-string)
+               (lambda ()
+                 (cl-incf call-count)
+                 "dasel version 2.8.1")))
       (dasel--check-version)
       (dasel--check-version)
-      (should (= 1 check-count)))))
+      (should (= 1 call-count)))))
+
+;;; Output window display tests
+
+(ert-deftest dasel-test-show-output-window-alist ()
+  "Show output window passes correct side/size alist to `display-buffer-in-side-window'."
+  (let ((dasel-output-buffer-name "*dasel-test-alist*")
+        (dasel-output-window-side 'right)
+        (dasel-output-window-size 0.4)
+        (captured-buf nil)
+        (captured-alist nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'display-buffer-in-side-window)
+                   (lambda (buf alist)
+                     (setq captured-buf buf
+                           captured-alist alist)
+                     nil)))
+          (get-buffer-create "*dasel-test-alist*")
+          (dasel--show-output-window)
+          (should (bufferp captured-buf))
+          (should (equal (alist-get 'side captured-alist) 'right))
+          (should (= (alist-get 'window-width captured-alist) 0.4))
+          (should (= (alist-get 'window-height captured-alist) 0.4)))
+      (when-let* ((buf (get-buffer "*dasel-test-alist*")))
+        (kill-buffer buf)))))
+
+(ert-deftest dasel-test-show-output-window-side-bottom ()
+  "Show output window respects `dasel-output-window-side' set to bottom."
+  (let ((dasel-output-buffer-name "*dasel-test-alist-bottom*")
+        (dasel-output-window-side 'bottom)
+        (dasel-output-window-size 0.3)
+        (captured-alist nil))
+    (unwind-protect
+        (cl-letf (((symbol-function 'display-buffer-in-side-window)
+                   (lambda (_buf alist)
+                     (setq captured-alist alist)
+                     nil)))
+          (get-buffer-create "*dasel-test-alist-bottom*")
+          (dasel--show-output-window)
+          (should (equal (alist-get 'side captured-alist) 'bottom))
+          (should (= (alist-get 'window-width captured-alist) 0.3)))
+      (when-let* ((buf (get-buffer "*dasel-test-alist-bottom*")))
+        (kill-buffer buf)))))
 
 ;;; Output buffer tests
 
@@ -340,9 +393,10 @@
 ;;; Integration tests (with real binary)
 
 (ert-deftest dasel-test-integration-run-json-query ()
-  "Run a real dasel query on JSON data."
-  (skip-unless (dasel-test-v2-available-p))
-  (let ((dasel--version-checked t))
+  "Run a real dasel query on JSON data (v2 or v3)."
+  (skip-unless (dasel-test-any-available-p))
+  (let ((dasel--version-checked nil)
+        (dasel--major-version nil))
     (let ((result (dasel--run dasel-test-sample-json "json" nil "name")))
       (should (= 0 (plist-get result :exit-code)))
       (should (string-match-p "Alice" (plist-get result :output))))))
@@ -417,12 +471,10 @@
 
 (ert-deftest dasel-test-check-version-unparseable ()
   "Signals user-error for unparseable version string."
-  (let ((dasel--version-checked nil))
-    (cl-letf (((symbol-function 'executable-find) (lambda (_cmd) "/usr/bin/dasel"))
-              ((symbol-function 'call-process)
-               (lambda (_program &optional _infile _destination _display &rest _args)
-                 (insert "something-without-version")
-                 0)))
+  (let ((dasel--version-checked nil)
+        (dasel--major-version nil))
+    (cl-letf (((symbol-function 'dasel--version-string)
+               (lambda () "something-without-version")))
       (should-error (dasel--check-version) :type 'user-error))))
 
 ;;; Selector Candidates tests
@@ -434,9 +486,10 @@
       (should (equal result '("name" "age" "tags"))))))
 
 (ert-deftest dasel-test-selector-candidates-with-prefix ()
-  "Selector candidates with prefix queries nested keys."
+  "Selector candidates with prefix queries nested keys (v2 path)."
   (let ((captured-selector nil))
-    (let ((dasel--version-checked t))
+    (let ((dasel--version-checked t)
+          (dasel--major-version 2))
       (cl-letf (((symbol-function 'dasel--run)
                  (lambda (_input _in-fmt &optional _out-fmt selector &rest _extra)
                    (setq captured-selector selector)
@@ -456,15 +509,102 @@
     (should-not (dasel--selector-candidates "{}" "json"))))
 
 (ert-deftest dasel-test-selector-candidates-no-prefix ()
-  "Selector candidates without prefix uses .all().key() selector."
+  "Selector candidates without prefix uses .all().key() selector (v2 path)."
   (let ((captured-selector nil))
-    (let ((dasel--version-checked t))
+    (let ((dasel--version-checked t)
+          (dasel--major-version 2))
       (cl-letf (((symbol-function 'dasel--run)
                  (lambda (_input _in-fmt &optional _out-fmt selector &rest _extra)
                    (setq captured-selector selector)
                    (list :output "a\nb" :exit-code 0 :error ""))))
         (dasel--selector-candidates "{}" "json")
         (should (equal captured-selector ".all().key()"))))))
+
+;;; Version check edge cases
+
+(ert-deftest dasel-test-check-version-v2-minimum ()
+  "Accepts the minimum supported version 2.8.0."
+  (let ((dasel--version-checked nil)
+        (dasel--major-version nil))
+    (cl-letf (((symbol-function 'dasel--version-string)
+               (lambda () "dasel version 2.8.0")))
+      (dasel--check-version)
+      (should (eq t dasel--version-checked))
+      (should (= 2 dasel--major-version)))))
+
+(ert-deftest dasel-test-check-version-v2-higher-minor ()
+  "Accepts version 2.9.x (above minimum)."
+  (let ((dasel--version-checked nil)
+        (dasel--major-version nil))
+    (cl-letf (((symbol-function 'dasel--version-string)
+               (lambda () "dasel version 2.9.0")))
+      (dasel--check-version)
+      (should (eq t dasel--version-checked))
+      (should (= 2 dasel--major-version)))))
+
+;;; Format detection edge cases
+
+(ert-deftest dasel-test-detect-format-toml-extension ()
+  "File extension .toml maps to toml format."
+  (with-temp-buffer
+    (let ((buffer-file-name "/tmp/test.toml"))
+      (should (equal "toml" (dasel--detect-format))))))
+
+(ert-deftest dasel-test-detect-format-xml-extension ()
+  "File extension .xml maps to xml format."
+  (with-temp-buffer
+    (let ((buffer-file-name "/tmp/test.xml"))
+      (should (equal "xml" (dasel--detect-format))))))
+
+(ert-deftest dasel-test-detect-format-csv-extension ()
+  "File extension .csv maps to csv format."
+  (with-temp-buffer
+    (let ((buffer-file-name "/tmp/test.csv"))
+      (should (equal "csv" (dasel--detect-format))))))
+
+(ert-deftest dasel-test-detect-format-priority-order ()
+  "Buffer-local format takes priority over major-mode detection."
+  (with-temp-buffer
+    (let ((major-mode 'json-ts-mode))
+      (setq-local dasel-buffer-format "toml")
+      (should (equal "toml" (dasel--detect-format))))))
+
+(ert-deftest dasel-test-detect-format-sniff-toml ()
+  "`dasel--detect-format' detects TOML via content sniffing."
+  (with-temp-buffer
+    (insert "key = \"value\"\n")
+    (should (equal "toml" (dasel--detect-format)))))
+
+;;; Output buffer display tests
+
+(ert-deftest dasel-test-display-output-mode-switch ()
+  "Display output switches to the appropriate mode for the format."
+  (let ((dasel-output-buffer-name "*dasel-test-mode-switch*")
+        (dasel-output-mode-alist dasel-test-safe-mode-alist))
+    (unwind-protect
+        (cl-letf (((symbol-function 'display-buffer-in-side-window)
+                   (lambda (_buf _alist) nil)))
+          (dasel--display-output "content" "json")
+          (let ((buf (get-buffer "*dasel-test-mode-switch*")))
+            (should buf)
+            (with-current-buffer buf
+              (should (eq major-mode 'fundamental-mode)))))
+      (when-let* ((buf (get-buffer "*dasel-test-mode-switch*")))
+        (kill-buffer buf)))))
+
+(ert-deftest dasel-test-run-put-success ()
+  "Successful run-put returns plist with exit-code 0."
+  (dasel-test-with-mock-process 0 "{\"name\":\"Bob\"}" ""
+    (let ((result (dasel--run-put "{\"name\":\"Alice\"}" "json" "string" "Bob" ".name")))
+      (should (= 0 (plist-get result :exit-code)))
+      (should (equal "{\"name\":\"Bob\"}" (plist-get result :output))))))
+
+(ert-deftest dasel-test-run-put-error ()
+  "Failed run-put returns plist with non-zero exit-code."
+  (dasel-test-with-mock-process 1 "" "selector not found"
+    (let ((result (dasel--run-put "{}" "json" "string" "x" "bad")))
+      (should (= 1 (plist-get result :exit-code)))
+      (should (string-match-p "selector" (plist-get result :error))))))
 
 (provide 'dasel-test)
 ;;; dasel-test.el ends here

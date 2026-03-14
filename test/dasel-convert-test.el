@@ -108,9 +108,10 @@
         (should (equal dasel-buffer-format "yaml"))))))
 
 (ert-deftest dasel-test-convert-integration ()
-  "Integration test: convert with real dasel binary."
-  (skip-unless (dasel-test-v2-available-p))
-  (let ((dasel--version-checked t)
+  "Integration test: convert with real dasel binary (v2 or v3)."
+  (skip-unless (dasel-test-any-available-p))
+  (let ((dasel--version-checked nil)
+        (dasel--major-version nil)
         (dasel-output-mode-alist dasel-test-safe-mode-alist))
     (dasel-test-with-buffer "json" "{\"name\":\"Alice\"}"
       (dasel-convert "yaml")
@@ -145,6 +146,54 @@
 (ert-deftest dasel-test-convert-formats-customizable ()
   "`dasel-convert-formats' defaults to `dasel-supported-formats'."
   (should (equal dasel-convert-formats dasel-supported-formats)))
+
+;;; Region conversion tests
+
+(ert-deftest dasel-test-convert-region-only ()
+  "Convert--do with explicit region boundaries leaves surrounding text intact."
+  (let ((dasel-output-mode-alist dasel-test-safe-mode-alist))
+    (with-temp-buffer
+      (insert "PREFIX")
+      (let ((region-start (point)))
+        (insert dasel-test-sample-json)
+        (let ((region-end (point)))
+          (insert "SUFFIX")
+          (setq-local dasel-buffer-format "json")
+          (dasel-test-with-mock-run 0 dasel-test-sample-yaml ""
+            ;; Call the internal helper directly to avoid use-region-p complexity.
+            (dasel-convert--do "json" "yaml" region-start region-end)
+            (should (string-prefix-p "PREFIX" (buffer-string)))
+            (should (string-suffix-p "SUFFIX" (buffer-string)))))))))
+
+(ert-deftest dasel-test-convert-convenience-error ()
+  "Convenience command signals user-error on non-zero exit code."
+  (dasel-test-with-buffer "json" "{invalid}"
+    (dasel-test-with-mock-run 1 "" "conversion error"
+      (should-error (dasel-convert-json-to-yaml) :type 'user-error))))
+
+(ert-deftest dasel-test-convert-convenience-updates-format ()
+  "All convenience commands update `dasel-buffer-format' to target."
+  (let ((dasel-output-mode-alist dasel-test-safe-mode-alist))
+    (dasel-test-with-buffer "yaml" dasel-test-sample-yaml
+      (dasel-test-with-mock-run 0 dasel-test-sample-toml ""
+        (dasel-convert-yaml-to-toml)
+        (should (equal dasel-buffer-format "toml"))))))
+
+;;; Helper function tests
+
+(ert-deftest dasel-test-convert-do-replaces-region ()
+  "dasel-convert--do replaces the specified region with converted output."
+  (let ((dasel-output-mode-alist dasel-test-safe-mode-alist))
+    (with-temp-buffer
+      (insert "BEFORE")
+      (let ((beg (point)))
+        (insert "{\"a\":1}")
+        (let ((end (point)))
+          (setq-local dasel-buffer-format "json")
+          (dasel-test-with-mock-run 0 "a: 1\n" ""
+            (dasel-convert--do "json" "yaml" beg end)
+            (should (string-prefix-p "BEFORE" (buffer-string)))
+            (should (string-match-p "a: 1" (buffer-string)))))))))
 
 (provide 'dasel-convert-test)
 ;;; dasel-convert-test.el ends here

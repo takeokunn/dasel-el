@@ -20,9 +20,11 @@
 EXIT-CODE is the integer exit code to return.
 STDOUT is a string to insert into the output buffer.
 STDERR is a string to write to the stderr temp file.
-Also sets `dasel--version-checked' to t to bypass version checks."
+Also sets `dasel--version-checked' to t and `dasel--major-version' to 2
+to bypass version checks and use v2 dispatch."
   (declare (indent 3) (debug t))
-  `(let ((dasel--version-checked t))
+  `(let ((dasel--version-checked t)
+         (dasel--major-version 2))
      (cl-letf (((symbol-function 'call-process-region)
                 (lambda (_start _end _program &optional _delete destination _display &rest _args)
                   (let ((buf (if (listp destination) (car destination) destination))
@@ -41,7 +43,8 @@ OUTPUT is the string output.
 ERROR is the string error.
 Also sets `dasel--version-checked' to t to bypass version checks."
   (declare (indent 3) (debug t))
-  `(let ((dasel--version-checked t))
+  `(let ((dasel--version-checked t)
+         (dasel--major-version 2))
      (cl-letf (((symbol-function 'dasel--run)
                 (lambda (_input _in-fmt &optional _out-fmt _selector &rest _extra)
                   (list :output ,output :exit-code ,exit-code :error ,error))))
@@ -54,7 +57,8 @@ OUTPUT is the string output.
 ERROR is the string error.
 Also sets `dasel--version-checked' to t to bypass version checks."
   (declare (indent 3) (debug t))
-  `(let ((dasel--version-checked t))
+  `(let ((dasel--version-checked t)
+         (dasel--major-version 2))
      (cl-letf (((symbol-function 'dasel--run-put)
                 (lambda (_input _fmt _type _value _selector)
                   (list :output ,output :exit-code ,exit-code :error ,error))))
@@ -85,10 +89,23 @@ Avoids tree-sitter mode activation failures in --batch -Q.")
                        (call-process dasel-command nil (current-buffer) nil "--version")
                        (string-trim (buffer-string)))))
          (or (string-prefix-p "development" output)
-             (when (string-match "\\([0-9]+\\)\\.\\([0-9]+\\)\\." output)
+             (when (string-match "\\([0-9]+\\)\\.\\([0-9]+\\)" output)
                (let ((major (string-to-number (match-string 1 output)))
                      (minor (string-to-number (match-string 2 output))))
                  (and (= major 2) (>= minor 8))))))))
+
+(defun dasel-test-v3-available-p ()
+  "Return non-nil if dasel v3.x is available on this system."
+  (and (executable-find dasel-command)
+       (let ((output (with-temp-buffer
+                       (call-process dasel-command nil (current-buffer) nil "version")
+                       (string-trim (buffer-string)))))
+         (when (string-match "\\([0-9]+\\)\\." output)
+           (= 3 (string-to-number (match-string 1 output)))))))
+
+(defun dasel-test-any-available-p ()
+  "Return non-nil if any supported dasel version is available."
+  (or (dasel-test-v2-available-p) (dasel-test-v3-available-p)))
 
 (defconst dasel-test-sample-json
   "{\"name\":\"Alice\",\"age\":30,\"tags\":[\"admin\",\"user\"]}"

@@ -26,16 +26,17 @@
 
 ;;; Commentary:
 
-;; Consult integration for dasel, providing interactive dasel queries
-;; with live preview using the consult framework.
+;; Consult integration for dasel, providing `consult-dasel' -- an
+;; interactive command for querying structured data with live preview
+;; powered by consult's asynchronous preview mechanism.
 ;;
 ;; Usage:
-;;   M-x consult-dasel
+;;   Open a buffer containing JSON, YAML, TOML, XML, or CSV data and
+;;   invoke \\[consult-dasel].  Type a dasel selector such as
+;;   \".name\" or \".users.[0].email\" to see the result displayed live
+;;   in a side window as you type.
 ;;
-;; Open a buffer containing JSON, YAML, TOML, XML, or CSV data and
-;; invoke `consult-dasel'.  Type a dasel selector (e.g., "name",
-;; "users[0]") to see the query result displayed live in a side
-;; window.
+;; Requires the consult package (MELPA: consult >= 1.0).
 
 ;;; Code:
 
@@ -49,8 +50,10 @@
   :prefix "consult-dasel-")
 
 (defcustom consult-dasel-output-format nil
-  "Output format override for consult-dasel queries.
-When nil, the output format matches the input format."
+  "Default output format for `consult-dasel' queries.
+When nil, the output format matches the input format of the source buffer.
+Set to a dasel format string such as \"json\" or \"yaml\" to always
+produce output in that format regardless of the input."
   :type '(choice (const :tag "Same as input" nil)
                  (const :tag "JSON" "json")
                  (const :tag "YAML" "yaml")
@@ -60,13 +63,15 @@ When nil, the output format matches the input format."
   :group 'consult-dasel)
 
 (defvar consult-dasel--history nil
-  "History for `consult-dasel' queries.")
+  "Minibuffer history for `consult-dasel' selector input.")
+
+;;; Internal helpers
 
 (defun consult-dasel--state (source-buffer input-format output-format)
-  "Create a consult state function for dasel queries.
-SOURCE-BUFFER is the buffer containing the input data.
-INPUT-FORMAT is the detected format of the source data.
-OUTPUT-FORMAT is the desired output format, or nil for same as input."
+  "Return a consult state function for dasel queries.
+SOURCE-BUFFER is the buffer supplying the input data.
+INPUT-FORMAT is the detected dasel format string for that buffer.
+OUTPUT-FORMAT is the desired output format, or nil to use INPUT-FORMAT."
   (lambda (action candidate)
     (pcase action
       ('preview
@@ -83,12 +88,15 @@ OUTPUT-FORMAT is the desired output format, or nil for same as input."
        (dasel--close-output-window))
       ('return nil))))
 
+;;; Entry Point
+
 ;;;###autoload
 (defun consult-dasel ()
   "Interactively query the current buffer with dasel using consult.
-The current buffer must contain data in a format supported by dasel
-\(JSON, YAML, TOML, XML, or CSV).  As you type a dasel selector,
-the query result is displayed live in a side window."
+The current buffer must contain data in a supported format (JSON, YAML,
+TOML, XML, or CSV).  As you type a dasel selector the query result is
+displayed live in a side window via consult's preview mechanism.
+The output format defaults to `consult-dasel-output-format'."
   (interactive)
   (let* ((source-buffer (current-buffer))
          (input-format (dasel--detect-format source-buffer)))

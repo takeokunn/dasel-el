@@ -28,11 +28,17 @@
 
 ;; Interactive querying of structured data (JSON, YAML, TOML, XML, CSV)
 ;; with live preview using dasel.  Type a dasel selector in the minibuffer
-;; and see the query result update in real time.
+;; and see the query result update in real time in a side window.
+;;
+;; Use `dasel-interactive' as the entry point.  While the minibuffer is
+;; active, \\<dasel-interactive-map>\\[dasel-interactive-cycle-output-format]
+;; cycles through available output formats and \\[completion-at-point]
+;; offers key completion based on the current selector path.
 
 ;;; Code:
 
 (require 'cl-lib)
+(require 'seq)
 (require 'dasel)
 
 (defgroup dasel-interactive nil
@@ -41,31 +47,36 @@
   :prefix "dasel-interactive-")
 
 (defcustom dasel-interactive-delay 0.3
-  "Debounce delay in seconds before executing a dasel query."
+  "Debounce delay in seconds before executing a dasel query.
+A lower value gives faster feedback but increases CPU usage."
   :type 'float
   :group 'dasel-interactive)
 
 (defcustom dasel-interactive-output-format nil
-  "Output format override for interactive queries.
-When nil, the output format is the same as the input format."
+  "Default output format for interactive queries.
+When nil, the output format matches the input format.
+Can be changed at runtime with `dasel-interactive-cycle-output-format'."
   :type '(choice (const :tag "Same as input" nil)
                  (string :tag "Format"))
   :group 'dasel-interactive)
 
 (defvar dasel-interactive--source-buffer nil
-  "The buffer being queried.")
+  "The buffer being queried during an interactive session.")
 
 (defvar dasel-interactive--input-format nil
-  "Detected input format of the source buffer.")
+  "Detected data format of `dasel-interactive--source-buffer'.")
 
 (defvar dasel-interactive--output-format nil
-  "Current output format (may be cycled by the user).")
+  "Output format used in the current interactive session.
+May be nil (same as input) or a dasel format string.
+Cycled by `dasel-interactive-cycle-output-format'.")
 
 (defvar dasel-interactive--timer nil
-  "Debounce timer for live updates.")
+  "Debounce timer for deferred query execution.")
 
 (defvar dasel-interactive--last-input nil
-  "Last minibuffer contents, used for change detection.")
+  "Last minibuffer contents seen by `dasel-interactive--update'.
+Used to avoid redundant query executions.")
 
 ;;; Keymap
 
@@ -76,15 +87,15 @@ When nil, the output format is the same as the input format."
     (define-key map (kbd "C-j") #'electric-newline-and-maybe-indent)
     (define-key map (kbd "TAB") #'completion-at-point)
     map)
-  "Keymap for `dasel-interactive'.")
+  "Keymap used in the `dasel-interactive' minibuffer.")
 
 ;;; Completion
 
 (defun dasel-interactive--completion-at-point ()
-  "Completion-at-point function for dasel selectors.
-Provides key-name completion based on the current path in the selector.
-Parses the selector to find the parent path (up to the last dot),
-then queries dasel for available keys under that path.
+  "Completion-at-point function for dasel selectors in the minibuffer.
+Parses the selector text up to the last dot to determine the parent path,
+queries dasel for available keys under that path, and returns a completion
+table for the fragment after the last dot.
 Note: dots inside bracket selectors (e.g. [\"my.key\"]) are not handled."
   (let* ((input (minibuffer-contents-no-properties))
          (input-start (minibuffer-prompt-end))
@@ -103,7 +114,8 @@ Note: dots inside bracket selectors (e.g. [\"my.key\"]) are not handled."
 ;;; Execute
 
 (defun dasel-interactive--execute ()
-  "Execute the current dasel query and display the result."
+  "Execute the current minibuffer selector and display the result.
+Does nothing when no minibuffer window is active."
   (when (active-minibuffer-window)
     (let* ((selector (with-current-buffer (window-buffer (active-minibuffer-window))
                        (minibuffer-contents-no-properties)))
@@ -122,8 +134,10 @@ Note: dots inside bracket selectors (e.g. [\"my.key\"]) are not handled."
 ;;; Live Update
 
 (defun dasel-interactive--update (_beg _end _len)
-  "Called from `after-change-functions' in the minibuffer.
-Debounces and triggers `dasel-interactive--execute'."
+  "Debounced handler for minibuffer input change.
+Called from `after-change-functions'.  Clear the output buffer when
+the selector is empty; otherwise schedule `dasel-interactive--execute'
+after `dasel-interactive-delay' seconds."
   (let ((input (minibuffer-contents-no-properties)))
     (unless (equal input dasel-interactive--last-input)
       (setq dasel-interactive--last-input input)
@@ -131,11 +145,10 @@ Debounces and triggers `dasel-interactive--execute'."
         (cancel-timer dasel-interactive--timer)
         (setq dasel-interactive--timer nil))
       (if (string-empty-p input)
-          (let ((buf (get-buffer dasel-output-buffer-name)))
-            (when buf
-              (with-current-buffer buf
-                (let ((inhibit-read-only t))
-                  (erase-buffer)))))
+          (when-let* ((buf (get-buffer dasel-output-buffer-name)))
+            (with-current-buffer buf
+              (let ((inhibit-read-only t))
+                (erase-buffer))))
         (setq dasel-interactive--timer
               (run-with-timer dasel-interactive-delay nil
                               #'dasel-interactive--execute))))))
@@ -143,16 +156,18 @@ Debounces and triggers `dasel-interactive--execute'."
 ;;; Minibuffer Setup
 
 (defun dasel-interactive--minibuffer-setup ()
-  "Set up the minibuffer for interactive dasel querying.
-Adds `dasel-interactive--update' to `after-change-functions' and
-registers `dasel-interactive--completion-at-point' for TAB completion."
+  "Prepare the minibuffer for interactive dasel querying.
+Registers `dasel-interactive--update' on `after-change-functions' and
+`dasel-interactive--completion-at-point' on `completion-at-point-functions'."
   (add-hook 'after-change-functions #'dasel-interactive--update nil t)
   (add-hook 'completion-at-point-functions #'dasel-interactive--completion-at-point nil t))
 
 ;;; Cycle Output Format
 
 (defun dasel-interactive-cycle-output-format ()
-  "Cycle through available output formats and re-execute the query."
+  "Cycle to the next output format in `dasel-supported-formats' and re-query.
+Wraps around after the last format.  The current format is shown in the
+echo area."
   (interactive)
   (let* ((current dasel-interactive--output-format)
          (pos (if current
@@ -169,8 +184,12 @@ registers `dasel-interactive--completion-at-point' for TAB completion."
 ;;;###autoload
 (defun dasel-interactive ()
   "Interactively query the current buffer with dasel.
-Type a dasel selector in the minibuffer and see the result update
-in real time.  Use \\<dasel-interactive-map>\\[dasel-interactive-cycle-output-format] to cycle output formats."
+Opens a minibuffer session.  As you type a dasel selector the result
+is displayed in real time in a side window.
+Press \\<dasel-interactive-map>\\[dasel-interactive-cycle-output-format] \
+to cycle output formats.
+Press \\[completion-at-point] for key completion.
+Abort the session with \\[keyboard-quit] to close the output window."
   (interactive)
   (let ((fmt (dasel--detect-format)))
     (unless fmt

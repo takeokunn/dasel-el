@@ -7,6 +7,7 @@ CONSULT_SRC = consult-dasel.el
 TEST_SRC = $(wildcard test/*-test.el)
 
 PACKAGE_INIT = --eval "(progn (require 'package) (push '(\"melpa\" . \"https://melpa.org/packages/\") package-archives) (package-initialize))"
+PACKAGE_INSTALL_LINT = --eval "(progn (require 'package) (push '(\"melpa\" . \"https://melpa.org/packages/\") package-archives) (package-initialize) (package-refresh-contents) (package-install 'package-lint))"
 
 .PHONY: all compile compile-consult test lint lint-consult package-lint package-lint-consult clean
 
@@ -29,7 +30,7 @@ lint:
 
 package-lint:
 	$(BATCH) $(LOAD_PATH) \
-	  --eval "(progn (require 'package) (push '(\"melpa\" . \"https://melpa.org/packages/\") package-archives) (package-initialize) (package-refresh-contents) (package-install 'package-lint))" \
+	  $(PACKAGE_INSTALL_LINT) \
 	  -l package-lint \
 	  -f package-lint-batch-and-exit $(SRC)
 
@@ -46,7 +47,9 @@ lint-consult:
 
 package-lint-consult:
 	$(BATCH) $(LOAD_PATH) \
-	  --eval "(progn (require 'package) (push '(\"melpa\" . \"https://melpa.org/packages/\") package-archives) (package-initialize) (package-refresh-contents) (package-install 'package-lint) (package-install-file (expand-file-name \"dasel.el\")))" \
+	  $(PACKAGE_INIT) \
+	  $(PACKAGE_INSTALL_LINT) \
+	  --eval "(package-install-file (expand-file-name \"dasel.el\"))" \
 	  -l package-lint \
 	  -f package-lint-batch-and-exit $(CONSULT_SRC)
 
